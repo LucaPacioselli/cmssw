@@ -17,7 +17,7 @@
 #include "FWCore/Framework/interface/LuminosityBlock.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/Framework/interface/Run.h"
-#include "FWCore/Framework/interface/one/EDProducer.h"
+#include "FWCore/Framework/interface/global/EDProducer.h"
 #include "FWCore/Framework/interface/TriggerNamesService.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
@@ -41,7 +41,7 @@
  */
 
 // TODO: change to an edm::global module
-class MPIController : public edm::one::EDProducer<edm::one::WatchRuns, edm::one::WatchLuminosityBlocks> {
+class MPIController : public edm::global::EDProducer<edm::StreamCache<nullptr_t>> {
 public:
   explicit MPIController(edm::ParameterSet const& config);
   ~MPIController() override;
@@ -49,13 +49,15 @@ public:
   void beginJob() override;
   void endJob() override;
 
-  void beginRun(edm::Run const& run, edm::EventSetup const& setup) override;
-  void endRun(edm::Run const& run, edm::EventSetup const& setup) override;
+  std::unique_ptr<nullptr_t> beginStream(edm::StreamID) const override { return std::make_unique<nullptr_t>(); }
 
-  void beginLuminosityBlock(edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) override;
-  void endLuminosityBlock(edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) override;
+  void streamBeginRun(edm::StreamID sid, edm::Run const& run, edm::EventSetup const& setup);
+  void streamEndRun(edm::StreamID sid, edm::Run const& run, edm::EventSetup const& setup);
 
-  void produce(edm::Event& event, edm::EventSetup const& setup) override;
+  void streamBeginLuminosityBlock(edm::StreamID sid, edm::LuminosityBlock const& lumi, edm::EventSetup const& setup);
+  void streamEndLuminosityBlock(edm::StreamID sid, edm::LuminosityBlock const& lumi, edm::EventSetup const& setup);
+
+  void produce(edm::StreamID sid, edm::Event& event, edm::EventSetup const& setup) const override;
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
@@ -72,8 +74,10 @@ private:
   }
 
   MPI_Comm comm_ = MPI_COMM_NULL;
-  std::vector<MPIChannel> followers_;
-  std::vector<std::vector<std::unique_ptr<MPIChannel>>> channels_;
+  mutable std::vector<MPIChannel> followers_;
+  mutable std::vector<std::unique_ptr<std::mutex>> channels_mutex_;
+  //mutable std::vector<tbb::concurrent_vector<std::unique_ptr<MPIChannel>>> channels_;
+  mutable std::vector<std::vector<std::unique_ptr<MPIChannel>>> channels_;
   edm::EDPutTokenT<MPIToken> token_;
   Mode mode_;
 };
@@ -147,6 +151,7 @@ MPIController::MPIController(edm::ParameterSet const& config)
       follower = 1;
       followers_.emplace_back(comm, follower);
       channels_.emplace_back();
+      channels_mutex_.push_back(std::make_unique<std::mutex>());
     }
   } else if (mode_ == kIntercommunicator) {
     // Use an intercommunicator to let two groups of processes communicate with each other.
@@ -225,7 +230,7 @@ void MPIController::endJob() {
   }
 }
 
-void MPIController::beginRun(edm::Run const& run, edm::EventSetup const& setup) {
+void MPIController::streamBeginRun(edm::StreamID sid, edm::Run const& run, edm::EventSetup const& setup) {
   // signal a new run, and transmit the RunAuxiliary
   /* FIXME
    * Ideally the ProcessHistoryID stored in the run.runAuxiliary() should be the correct one, and
@@ -251,7 +256,7 @@ void MPIController::beginRun(edm::Run const& run, edm::EventSetup const& setup) 
   }
 }
 
-void MPIController::endRun(edm::Run const& run, edm::EventSetup const& setup) {
+void MPIController::streamEndRun(edm::StreamID sid, edm::Run const& run, edm::EventSetup const& setup) {
   // signal the end of run
   /* FIXME
    * Ideally the ProcessHistoryID stored in the run.runAuxiliary() should be the correct one, and
@@ -273,7 +278,7 @@ void MPIController::endRun(edm::Run const& run, edm::EventSetup const& setup) {
   }
 }
 
-void MPIController::beginLuminosityBlock(edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) {
+void MPIController::streamBeginLuminosityBlock(edm::StreamID sid, edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) {
   // signal a new luminosity block, and transmit the LuminosityBlockAuxiliary
   /* FIXME
    * Ideally the ProcessHistoryID stored in the lumi.luminosityBlockAuxiliary() should be the
@@ -295,15 +300,15 @@ void MPIController::beginLuminosityBlock(edm::LuminosityBlock const& lumi, edm::
   }
 }
 
-void MPIController::endLuminosityBlock(edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) {
+void MPIController::streamEndLuminosityBlock(edm::StreamID sid, edm::LuminosityBlock const& lumi, edm::EventSetup const& setup) {
   // The MPIController is a "one" module that supports only a single luminosity block at a time.
   // Before proceeding to the next luminosity block, make sure that all events from the current
   // one have been processed.
-  for (auto& channels : channels_) {
+  /*for (auto& channels : channels_) {
     for (auto& channel : channels) {
       channel->wait();
     }
-  }
+  }*/
 
   // signal the end of luminosity block
   /* FIXME
@@ -326,7 +331,7 @@ void MPIController::endLuminosityBlock(edm::LuminosityBlock const& lumi, edm::Ev
   }
 }
 
-void MPIController::produce(edm::Event& event, edm::EventSetup const& setup) {
+void MPIController::produce(edm::StreamID sid, edm::Event& event, edm::EventSetup const& setup) const {
   LogDebug("MPI")  //
       << "processing run " << event.run() << ", lumi " << event.luminosityBlock() << ", event "
       << event.id().event()                                                                                 //
@@ -342,9 +347,11 @@ void MPIController::produce(edm::Event& event, edm::EventSetup const& setup) {
       << "\nprocessGUID " << edm::Guid(event.eventAuxiliary().processGUID(), true).toString();
 
   // Choose the follower associated to the framework stream, in a round-robin fashion.
-  unsigned int sid = event.streamID().value();
-  auto& follower = followers_[sid % followers_.size()];
-  auto& channels = channels_[sid % followers_.size()];
+  unsigned int streamid = event.streamID().value();
+  auto& follower = followers_[streamid % followers_.size()];
+  auto& channels = channels_[streamid % followers_.size()];
+
+  std::lock_guard lock(*channels_mutex_[sid % followers_.size()]);
 
   // Look for a channel that is ready to send a new event
   unsigned int slot = channels.size();
@@ -359,6 +366,7 @@ void MPIController::produce(edm::Event& event, edm::EventSetup const& setup) {
 
   // Signal a new event, and transmit the EventAuxiliary and channel slot to use.
   follower.sendEvent(event.eventAuxiliary(), slot);
+  edm::LogInfo("MPI") << "\033[1;31mMPIController: sent an event, stream " << sid << ", slot " << slot << "\033[0m";
 
   // If no channels were ready, allocate a new one.
   if (not found) {

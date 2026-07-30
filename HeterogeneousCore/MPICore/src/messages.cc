@@ -62,18 +62,19 @@ void EDM_MPI_build_types_() {
                    event,                     // edm::EventNumber_t
                    slotId);                   // MPIChannel index
 
-  EDM_MPI_MessageType[EDM_MPI_Connect] = EDM_MPI_Empty;                                  //
-  EDM_MPI_MessageType[EDM_MPI_Disconnect] = EDM_MPI_Empty;                               //
-  EDM_MPI_MessageType[EDM_MPI_BeginStream] = EDM_MPI_Empty;                              //
-  EDM_MPI_MessageType[EDM_MPI_EndStream] = EDM_MPI_Empty;                                //
-  EDM_MPI_MessageType[EDM_MPI_BeginRun] = EDM_MPI_RunAuxiliary;                          //
-  EDM_MPI_MessageType[EDM_MPI_EndRun] = EDM_MPI_RunAuxiliary;                            //
-  EDM_MPI_MessageType[EDM_MPI_BeginLuminosityBlock] = EDM_MPI_LuminosityBlockAuxiliary;  //
-  EDM_MPI_MessageType[EDM_MPI_EndLuminosityBlock] = EDM_MPI_LuminosityBlockAuxiliary;    //
-  EDM_MPI_MessageType[EDM_MPI_ProcessEvent] = EDM_MPI_EventAuxiliary;                    //
-  EDM_MPI_MessageType[EDM_MPI_SendSerializedProduct] = MPI_BYTE;                         // variable-length binary blob
-  EDM_MPI_MessageType[EDM_MPI_SendTrivialProduct] = MPI_BYTE;                            // variable-length binary blob
-  EDM_MPI_MessageType[EDM_MPI_SendMetadata] = MPI_BYTE;                                  //
+  EDM_MPI_MessageType[EDM_MPI_Connect] = EDM_MPI_Empty;                                     //
+  EDM_MPI_MessageType[EDM_MPI_Disconnect] = EDM_MPI_Empty;                                  //
+  EDM_MPI_MessageType[EDM_MPI_BeginStream] = EDM_MPI_Empty;                                 //
+  EDM_MPI_MessageType[EDM_MPI_EndStream] = EDM_MPI_Empty;                                   //
+  EDM_MPI_MessageType[EDM_MPI_BeginRun] = EDM_MPI_RunAuxiliary;                             //
+  EDM_MPI_MessageType[EDM_MPI_EndRun] = EDM_MPI_RunAuxiliary;                               //
+  EDM_MPI_MessageType[EDM_MPI_BeginLuminosityBlock] = EDM_MPI_LuminosityBlockAuxiliary;     //
+  EDM_MPI_MessageType[EDM_MPI_EndLuminosityBlock] = EDM_MPI_LuminosityBlockAuxiliary;       //
+  EDM_MPI_MessageType[EDM_MPI_LuminosityBlockComplete] = EDM_MPI_LuminosityBlockAuxiliary;  //
+  EDM_MPI_MessageType[EDM_MPI_ProcessEvent] = EDM_MPI_EventAuxiliary;                       //
+  EDM_MPI_MessageType[EDM_MPI_SendSerializedProduct] = MPI_BYTE;                            // variable-length binary blob
+  EDM_MPI_MessageType[EDM_MPI_SendTrivialProduct] = MPI_BYTE;                               // variable-length binary blob
+  EDM_MPI_MessageType[EDM_MPI_SendMetadata] = MPI_BYTE;                                     //
 }
 
 void EDM_MPI_build_types() {
